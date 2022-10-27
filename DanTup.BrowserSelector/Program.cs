@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Security.Policy;
 using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -243,36 +244,25 @@ To open multiple urls at the same time and wait for them, try the following:
 						// Unescape * as a wildcard.
 						pattern = string.Format("^{0}$", regex.Replace("\\*", ".*"));
 					}
-
-					if (Regex.IsMatch(domain, pattern))
+					
+					if ((uri.Authority + uri.AbsolutePath).Contains(urlPattern))
 					{
-						string loc = preference.Browser.Location;
-						if (loc.IndexOf("{url}") > -1)
-						{
-							loc = loc.Replace("{url}", _url);
-							_url = "";
-						}
-						if (loc.StartsWith("\"") && loc.IndexOf('"', 2) > -1)
-						{
-							// Assume the quoted item is the executable, while everything
-							// after (the second quote), is part of the command-line arguments.
-							loc = loc.Substring(1);
-							int pos = loc.IndexOf('"');
-							string args = loc.Substring(pos + 1).Trim();
-							loc = loc.Substring(0, pos).Trim();
-							p = Process.Start(loc, args + " " + _url);
-						}
-						else
-						{
-							// The browser specified in the INI file is a single executable
-							// without any other arguments.
-							// (normal/original behavior)
-							p = Process.Start(loc, _url);
-						}
+                        var process = LaunchBrowserInternal(preference, _url);
+
+                        if (waitForClose)
+                        {
+                            process.WaitForExit();
+                        }
+
+                        return;
+                    }
+					else if (Regex.IsMatch(domain, pattern))
+					{
+						var process = LaunchBrowserInternal(preference, _url);
 
 						if (waitForClose)
 						{
-							p.WaitForExit();
+                            process.WaitForExit();
 						}
 
 						return;
@@ -287,8 +277,34 @@ To open multiple urls at the same time and wait for them, try the following:
 			}
 		}
 
+		static Process LaunchBrowserInternal(UrlPreference preference, string url)
+		{
+            string loc = preference.Browser.Location;
+            if (loc.IndexOf("{url}") > -1)
+			{
+                loc = loc.Replace("{url}", url);
+                url = "";
+            }
+            if (loc.StartsWith("\"") && loc.IndexOf('"', 2) > -1)
+            {
+                // Assume the quoted item is the executable, while everything
+                // after (the second quote), is part of the command-line arguments.
+                loc = loc.Substring(1);
+                int pos = loc.IndexOf('"');
+                string args = loc.Substring(pos + 1).Trim();
+                loc = loc.Substring(0, pos).Trim();
+                return Process.Start(loc, args + " " + url);
+            }
+            else
+            {
+                // The browser specified in the INI file is a single executable
+                // without any other arguments.
+                // (normal/original behavior)
+                return Process.Start(loc, url);
+            }
+        }
 
-		static void CreateSampleSettings()
+        static void CreateSampleSettings()
 		{
 			DialogResult r = DialogResult.Yes;
 
